@@ -48,14 +48,16 @@ def send_alert(
     hostname: str | None = None,
 ) -> bool:
     icon = _SEVERITY_ICONS.get(severity, "⚠️")
-    host_line = f"<b>Host:</b> {hostname or socket.gethostname()}\n"
-    header = f"{icon} <b>{title}</b>\n{host_line}\n"
-    full = header + body
+    host = hostname or socket.gethostname()
+    header = f"{icon} <b>{title}</b>\n<b>Host:</b> {host}\n\n"
 
-    # Paginate if over limit
-    chunks = _paginate(full)
-    for chunk in chunks:
-        send_message(bot_token, chat_id, chunk)
+    # Paginate the body first, then prepend the header (with page number if
+    # multiple chunks) so every message has identifying context.
+    body_chunks = _paginate(body) if body else [""]
+    total = len(body_chunks)
+    for i, chunk in enumerate(body_chunks, 1):
+        page_suffix = f"\n\n<i>(page {i}/{total})</i>" if total > 1 else ""
+        send_message(bot_token, chat_id, header + chunk + page_suffix)
     return True
 
 

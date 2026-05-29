@@ -165,7 +165,7 @@ def _run_scan_profile(
     else:
         logger.info("[dry-run] Telegram notification skipped")
 
-    return report.exit_code(all_findings, all_errors if all_errors else None)
+    return report.exit_code(all_findings, all_errors or None)
 
 
 def _cmd_scan(args: argparse.Namespace, config: AppConfig) -> int:

@@ -51,7 +51,8 @@ def _load_cache(cache_path: str) -> dict:
 
 
 def _save_cache(cache_path: str, cache: dict) -> None:
-    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    if dir_part := os.path.dirname(cache_path):
+        os.makedirs(dir_part, exist_ok=True)
     with open(cache_path, "w") as f:
         json.dump(cache, f)
 

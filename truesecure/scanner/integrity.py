@@ -43,8 +43,20 @@ def scan(
             duration_s=time.time() - t0,
         )
 
-    # --- SUID binary diff ---
+    # Treat a baseline with empty suid_binaries as incomplete (e.g. failed first
+    # run) rather than silently flooding every scan with false-positive "new SUID"
+    # findings for every binary on the system.
     baseline_suid: dict[str, str] = baseline.get("suid_binaries", {})
+    if not baseline_suid and suid_search_roots:
+        errors.append(
+            "Integrity baseline has no SUID binary records — run 'truesecure baseline --reset' to rebuild"
+        )
+        return ScanResult(
+            scanner="integrity",
+            ok=True,
+            errors=errors,
+            duration_s=time.time() - t0,
+        )
     current_suid = collect_suid_binaries(suid_search_roots)
 
     new_suid = set(current_suid) - set(baseline_suid)

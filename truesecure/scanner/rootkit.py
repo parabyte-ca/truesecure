@@ -74,20 +74,17 @@ def scan(
 
 
 def _parse_rkhunter_output(output: str) -> list[str]:
-    """Extract warning lines from rkhunter output."""
+    """Extract warning lines from rkhunter --report-warnings-only output.
+
+    rkhunter with --report-warnings-only already suppresses informational
+    output, so we trust its filtering rather than adding substring heuristics
+    that can accidentally drop real warnings (e.g. a warning line that also
+    contains "checking for").
+    """
     warnings: list[str] = []
     for line in output.splitlines():
         line = line.strip()
-        if not line:
-            continue
-        lower = line.lower()
-        if "warning" in lower or "found" in lower or "suspicious" in lower:
-            # Skip trivial rkhunter boilerplate
-            if any(skip in lower for skip in [
-                "checking for", "performing", "checking system",
-                "running checks", "info:", "note:",
-            ]):
-                continue
+        if line:
             warnings.append(line)
     return warnings
 

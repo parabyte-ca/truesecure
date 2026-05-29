@@ -77,9 +77,10 @@ def summary_text(
 
 
 def exit_code(findings: list[Finding], errors: Optional[list[str]] = None) -> int:
-    """0=clean, 1=findings present, 2=scan errors only."""
-    if errors:
-        return 2
+    """0=clean, 1=findings present, 2=scan errors present (may also have findings)."""
+    # Findings take priority over errors so callers always see active threats.
     if findings:
         return 1
+    if errors:
+        return 2
     return 0

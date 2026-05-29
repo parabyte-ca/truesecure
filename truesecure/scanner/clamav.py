@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import subprocess
 import time
 from typing import Optional
@@ -23,8 +24,18 @@ def scan(
     if extra_args is None:
         extra_args = ["--recursive", "--infected", "--no-summary"]
 
-    # Use ionice to run at idle I/O priority — avoids impacting NAS clients
-    cmd = ["ionice", "-c", "3", clamav_bin] + extra_args + [d for d in directories if d]
+    # Wrap with ionice for idle I/O priority only if ionice is available
+    if shutil.which("ionice"):
+        cmd = ["ionice", "-c", "3", clamav_bin] + extra_args + [d for d in directories if d]
+    else:
+        logger.debug("ionice not found — running clamscan without I/O priority adjustment")
+        cmd = [clamav_bin] + extra_args + [d for d in directories if d]
+
+    if not shutil.which(clamav_bin):
+        errors.append(
+            f"ClamAV not found at '{clamav_bin}' — install with: apt-get install clamav"
+        )
+        return ScanResult(scanner="clamav", ok=True, errors=errors, duration_s=time.time() - t0)
 
     try:
         result = subprocess.run(
@@ -33,10 +44,8 @@ def scan(
             text=True,
             timeout=timeout_s,
         )
-    except FileNotFoundError:
-        errors.append(
-            f"ClamAV not found at '{clamav_bin}' — install with: apt-get install clamav"
-        )
+    except FileNotFoundError as exc:
+        errors.append(f"Failed to launch scanner: {exc}")
         return ScanResult(scanner="clamav", ok=True, errors=errors, duration_s=time.time() - t0)
     except subprocess.TimeoutExpired:
         errors.append(f"ClamAV scan timed out after {timeout_s}s")

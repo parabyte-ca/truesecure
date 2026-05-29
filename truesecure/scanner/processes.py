@@ -48,8 +48,8 @@ def _read_proc_cmdline(pid: str) -> str:
         return ""
 
 
-def _read_proc_stat_cpu(pid: str) -> Optional[float]:
-    """Return total CPU ticks (utime+stime) for a process."""
+def _read_proc_stat_ticks(pid: str) -> Optional[float]:
+    """Return total CPU ticks (utime+stime) for a process — used to compute a delta."""
     try:
         with open(f"/proc/{pid}/stat") as f:
             parts = f.read().split()
@@ -91,28 +91,32 @@ def scan(
     if suspicious_dirs is None:
         suspicious_dirs = ["/tmp", "/dev/shm", "/run/shm"]
 
-    if not os.access("/proc/1/exe", os.R_OK) and not os.path.exists("/proc/1"):
+    # Guard: /proc/1 must exist AND be readable; if only one condition fails, proceed
+    # but note the limitation. If /proc is completely absent, skip cleanly.
+    if not os.path.exists("/proc/1"):
         errors.append("/proc not accessible — process scanning skipped")
         return ScanResult(scanner="processes", ok=True, errors=errors, duration_s=time.time() - t0)
 
+    # --- Snapshot per-process ticks BEFORE the sleep for accurate CPU delta ---
     pids = _get_all_pids()
+    ticks_before: dict[str, float] = {}
+    proc_info: dict[str, tuple[str, str, str]] = {}  # pid → (exe, comm, cmdline)
+
     total_ticks_start = _get_total_cpu_ticks()
-    # Small delay to measure CPU usage
-    time.sleep(1)
-    total_ticks_end = _get_total_cpu_ticks()
-    total_delta = (total_ticks_end or 0) - (total_ticks_start or 1)
-    if total_delta <= 0:
-        total_delta = 1
 
     for pid in pids:
         exe = _read_proc_exe(pid)
         comm = _read_proc_comm(pid)
         cmdline = _read_proc_cmdline(pid)
+        proc_info[pid] = (exe, comm, cmdline)
 
-        # 1. Deleted executable (process running from a file that no longer exists on disk)
+        t = _read_proc_stat_ticks(pid)
+        if t is not None:
+            ticks_before[pid] = t
+
+        # 1. Deleted executable
         if check_deleted_exe and exe.endswith(" (deleted)"):
             real_exe = exe.replace(" (deleted)", "")
-            # Exclude kernel threads and known transient executables
             if real_exe and not real_exe.startswith("/memfd:"):
                 findings.append(Finding(
                     scanner="processes",
@@ -147,24 +151,33 @@ def scan(
                 ))
                 break
 
-    # 4. High single-process CPU (re-read stats after delay)
-    for pid in _get_all_pids():
-        ticks = _read_proc_stat_cpu(pid)
-        if ticks is None:
-            continue
-        # Simple heuristic: if ticks / total_delta > threshold, flag it
-        cpu_pct = (ticks / total_delta) * 100
+    # --- Sleep, then compute per-process CPU delta over the interval ---
+    time.sleep(1)
+
+    total_ticks_end = _get_total_cpu_ticks()
+    total_delta = (total_ticks_end or 0) - (total_ticks_start or 1)
+    if total_delta <= 0:
+        total_delta = 1
+
+    # 4. High single-process CPU measured as delta over the 1-second window
+    for pid, before in ticks_before.items():
+        after = _read_proc_stat_ticks(pid)
+        if after is None:
+            continue  # process exited during measurement window
+        proc_delta = after - before
+        if proc_delta < 0:
+            continue  # wraparound or kernel thread noise
+        cpu_pct = (proc_delta / total_delta) * 100
         if cpu_pct > cpu_threshold_pct:
-            comm = _read_proc_comm(pid)
-            exe = _read_proc_exe(pid)
-            # Skip expected high-CPU system daemons
+            comm = proc_info[pid][1]
+            exe = proc_info[pid][0]
             if comm in ("kworker", "ksoftirqd", "migration", "rcu_sched"):
                 continue
             findings.append(Finding(
                 scanner="processes",
                 severity=Severity.WARNING,
                 title=f"High CPU process: {comm or pid} ({cpu_pct:.0f}%)",
-                detail=f"PID {pid} exe={exe!r} consuming ~{cpu_pct:.0f}% CPU — possible miner or runaway process",
+                detail=f"PID {pid} exe={exe!r} consuming ~{cpu_pct:.0f}% CPU over 1s — possible miner or runaway process",
                 host=pid,
             ))
 

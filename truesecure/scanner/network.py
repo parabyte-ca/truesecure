@@ -30,6 +30,15 @@ _PRIVATE_NETWORKS = [
     ipaddress.ip_network("fe80::/10"),
 ]
 
+# Common ports expected to be open on TrueNAS — not flagged as unusual listeners
+_COMMON_PORTS = {
+    22, 80, 443, 111, 2049, 445, 139, 137, 138,  # SSH, HTTP, HTTPS, NFS, SMB
+    6000, 6100, 8006, 9000, 9001, 9090,            # TrueNAS middleware, Portainer, etc.
+    3260, 860,                                      # iSCSI
+    5000, 5001,                                     # Syncthing / misc apps
+    32400,                                          # Plex
+}
+
 _SS_HEADER_RE = re.compile(r"^Netid\s+State")
 
 
@@ -44,14 +53,21 @@ def _is_private(ip_str: str) -> bool:
 def _parse_addr(addr: str) -> tuple[str, str]:
     """Split 'IP:port' or '[IPv6]:port' into (ip, port)."""
     if addr.startswith("["):
-        # IPv6: [::1]:22
-        bracket_end = addr.index("]")
+        # Bracketed IPv6: [::1]:22
+        try:
+            bracket_end = addr.index("]")
+        except ValueError:
+            return addr, ""
         ip = addr[1:bracket_end]
         port = addr[bracket_end + 2:] if bracket_end + 2 < len(addr) else ""
     elif addr.count(":") == 1:
+        # IPv4 with port: 1.2.3.4:8080
         ip, port = addr.rsplit(":", 1)
+    elif ":" not in addr:
+        # Bare IPv4 with no port (e.g. raw/ICMP sockets)
+        ip, port = addr, ""
     else:
-        # bare IPv6 without port (shouldn't happen in ss but guard it)
+        # Bare IPv6 without brackets (multiple colons, no port)
         ip, port = addr, ""
     return ip, port
 
@@ -239,12 +255,3 @@ def scan(
         duration_s=time.time() - t0,
     )
 
-
-# Common ports that are expected to be open on TrueNAS
-_COMMON_PORTS = {
-    22, 80, 443, 111, 2049, 445, 139, 137, 138,  # SSH, HTTP, HTTPS, NFS, SMB
-    6000, 6100, 8006, 9000, 9001, 9090,            # TrueNAS middleware, Portainer, etc.
-    3260, 860,                                      # iSCSI
-    5000, 5001,                                     # Syncthing / misc apps
-    32400,                                          # Plex
-}

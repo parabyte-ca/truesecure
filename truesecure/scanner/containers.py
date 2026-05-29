@@ -156,11 +156,14 @@ def scan(
                         host=c_id,
                     ))
 
-            # 4. Sensitive bind mounts
-            binds = host_config.get("Binds") or []
+            # 4. Sensitive bind mounts — use only Mounts (canonical parsed form);
+            # HostConfig.Binds is the raw string representation of the same data.
             mounts = inspect.get("Mounts", [])
-            all_source_paths = [b.split(":")[0] for b in binds if ":" in b]
-            all_source_paths += [m.get("Source", "") for m in mounts if m.get("Type") == "bind"]
+            all_source_paths = list({
+                m.get("Source", "")
+                for m in mounts
+                if m.get("Type") == "bind" and m.get("Source")
+            })
 
             for src in all_source_paths:
                 for sensitive in sensitive_mount_paths:
