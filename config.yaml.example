@@ -1,0 +1,94 @@
+# TrueSecure configuration
+# Copy to /etc/truesecure/config.yaml and fill in credentials.
+# File permissions should be 640 (chmod 640 /etc/truesecure/config.yaml).
+#
+# Credentials can also be provided via environment variables:
+#   TRUESECURE_BOT_TOKEN  — overrides telegram.bot_token
+#   TRUESECURE_CHAT_ID    — overrides telegram.chat_id
+
+telegram:
+  bot_token: "YOUR_BOT_TOKEN_HERE"    # from @BotFather on Telegram
+  chat_id: "YOUR_CHAT_ID_HERE"        # numeric chat ID or @channel_name
+  notify_on_info: false               # set true to receive INFO-level alerts too
+
+scan:
+  # Directories scanned by ClamAV (daily/full profile only — not run at startup)
+  clamav_dirs:
+    - /home
+    - /root
+    - /tmp
+    - /var/tmp
+    - /dev/shm
+  # Avoid adding /mnt/<pool> paths here unless you want to scan all NAS data (very slow)
+
+  clamav_bin: clamscan
+  clamav_extra_args:
+    - "--recursive"
+    - "--infected"    # print infected files only (less noisy)
+    - "--no-summary"
+
+  rkhunter_bin: rkhunter
+
+  # Flag any single process consuming more than this % of CPU
+  cpu_threshold_pct: 80.0
+
+  # Processes launched from these directories are flagged as suspicious
+  suspicious_dirs:
+    - /tmp
+    - /dev/shm
+    - /run/shm
+
+  # CVE scanning via OSV.dev (free, no API key required)
+  cve_osv_enabled: true
+  # Optional NVD API key for higher rate limits (50 req/30s vs 5 req/30s without key)
+  # Get a free key at: https://nvd.nist.gov/developers/request-an-api-key
+  cve_nvd_api_key: null
+
+  # IPs/CIDRs that should never be flagged in the network scan
+  # RFC1918 (192.168.x.x, 10.x.x.x, 172.16-31.x.x) and loopback are always allowed.
+  allowlisted_ips:
+    - "192.168.1.0/24"   # adjust to match your LAN subnet
+
+integrity:
+  # Directories searched for SUID/SGID binaries at baseline build time
+  suid_search_roots:
+    - /usr
+    - /bin
+    - /sbin
+  check_crontabs: true
+  check_systemd_units: true
+
+containers:
+  enabled: true
+
+  # List of Docker image names/tags that are expected on this system.
+  # Any container running an image NOT in this list will trigger a WARNING.
+  # Leave empty ([]) to disable image allowlist checking.
+  # Example:
+  #   - "portainer/portainer-ce:latest"
+  #   - "nginx:alpine"
+  allowed_images: []
+
+  # Scan container overlay filesystems with ClamAV during full scans.
+  # Disabled by default due to high disk I/O. Enable if you suspect container compromise.
+  clamav_overlay_scan: false
+
+  # Host paths that should never be bind-mounted into containers.
+  sensitive_mount_paths:
+    - /etc
+    - /root
+    - /var/lib/truesecure
+    - /proc
+    - /sys
+
+feeds:
+  # How long (hours) before threat intelligence feeds are considered stale and re-downloaded
+  ttl_hours: 6
+  feeds_dir: /var/lib/truesecure/feeds
+
+# Directory for state files (baseline.json, cve_cache.json)
+# IMPORTANT on TrueNAS SCALE: change this to a persistent ZFS dataset path,
+# e.g. /mnt/tank/truesecure — the default /var/lib path is wiped on OS updates.
+state_dir: /var/lib/truesecure
+
+log_level: INFO    # DEBUG | INFO | WARNING

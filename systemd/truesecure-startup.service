@@ -1,0 +1,30 @@
+[Unit]
+Description=TrueSecure startup security scan (fast profile)
+Documentation=https://github.com/parabyte-ca/truesecure
+After=network-online.target
+Wants=network-online.target
+# Only run if config exists — skip silently otherwise
+ConditionPathExists=/etc/truesecure/config.yaml
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/truesecure scan --quick
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=truesecure
+# Startup scan should complete in under 2 minutes
+TimeoutStartSec=120
+
+# Hardening: prevent the scanner itself from being a vector
+NoNewPrivileges=yes
+# Protect system dirs from accidental writes, but allow reads (for scanning)
+ProtectSystem=full
+# Allow writing state to /var/lib/truesecure
+ReadWritePaths=/var/lib/truesecure
+# Do NOT use PrivateTmp — scanner needs to inspect real /tmp for suspicious processes
+PrivateTmp=no
+
+[Install]
+WantedBy=multi-user.target

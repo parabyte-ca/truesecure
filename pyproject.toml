@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "truesecure"
+version = "0.1.0"
+description = "TrueNAS SCALE security scanner with Telegram alerting"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",
+    "pyyaml>=6.0",
+    "psutil>=5.9",
+]
+
+[project.scripts]
+truesecure = "truesecure.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["truesecure*"]
