@@ -1,0 +1,16 @@
+[Unit]
+Description=TrueSecure daily security scan timer
+Documentation=https://github.com/parabyte-ca/truesecure
+Requires=truesecure-daily.service
+
+[Timer]
+# Run daily at 2:00am
+OnCalendar=*-*-* 02:00:00
+# Spread start time randomly by up to 10 minutes to avoid thundering herd
+RandomizedDelaySec=600
+# Re-run a missed scan if the system was offline at the scheduled time
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

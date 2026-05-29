@@ -1,0 +1,25 @@
+[Unit]
+Description=TrueSecure daily security scan (full profile)
+Documentation=https://github.com/parabyte-ca/truesecure
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/truesecure/config.yaml
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/truesecure scan --full
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=truesecure
+# Full scan (ClamAV + CVE) can take up to 2 hours
+TimeoutStartSec=7200
+
+NoNewPrivileges=yes
+ProtectSystem=full
+ReadWritePaths=/var/lib/truesecure
+PrivateTmp=no
+
+[Install]
+WantedBy=multi-user.target
